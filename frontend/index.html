@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Julien's Chinese Vocabulary</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>🀄 Julien's Chinese Vocabulary</h1>
+      <nav>
+        <button class="nav-btn active" data-view="dashboard">Dashboard</button>
+        <button class="nav-btn" data-view="study">Study</button>
+        <button class="nav-btn" data-view="quiz">Quiz</button>
+        <button class="nav-btn" data-view="browse">Browse</button>
+        <button class="nav-btn" data-view="stories">Stories</button>
+      </nav>
+    </header>
+
+    <main>
+      <!-- Dashboard -->
+      <section id="dashboard" class="view active">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <span class="stat-number" id="total-words">0</span>
+            <span class="stat-label">Total Words</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-number" id="mastered-words">0</span>
+            <span class="stat-label">Mastered</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-number" id="learning-words">0</span>
+            <span class="stat-label">Learning</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-number" id="due-words">0</span>
+            <span class="stat-label">Due for Review</span>
+          </div>
+        </div>
+        <div class="level-filter">
+          <button class="filter-btn active" data-level="all">All</button>
+          <button class="filter-btn" data-level="1">HSK 1</button>
+          <button class="filter-btn" data-level="2">HSK 2</button>
+          <button class="filter-btn" data-level="3">Class</button>
+        </div>
+        <div class="progress-section">
+          <h3>Progress</h3>
+          <div class="progress-bar-container">
+            <div class="progress-bar" id="progress-bar"></div>
+          </div>
+          <p id="progress-text">0% complete</p>
+        </div>
+        <button class="primary-btn" id="start-review">Start Review Session</button>
+      </section>
+
+      <!-- Study (Flashcards with SRS) -->
+      <section id="study" class="view">
+        <div class="study-mode-select">
+          <h3>Study Mode</h3>
+          <div class="mode-buttons">
+            <button class="mode-btn active" data-mode="mixed">🔀 Mixed</button>
+            <button class="mode-btn" data-mode="en_to_cn">English → 汉字</button>
+            <button class="mode-btn" data-mode="en_to_pinyin">English → Pinyin</button>
+            <button class="mode-btn" data-mode="cn_to_en">汉字 → English</button>
+            <button class="mode-btn" data-mode="cn_to_pinyin">汉字 → Pinyin</button>
+          </div>
+        </div>
+        <div class="flashcard-container">
+          <div class="flashcard" id="flashcard">
+            <div class="flashcard-front" id="card-front">
+              <p class="card-prompt" id="card-prompt">Click "Start Review" to begin</p>
+              <p class="card-context" id="card-context"></p>
+            </div>
+            <div class="flashcard-back hidden" id="card-back">
+              <p class="card-answer" id="card-answer"></p>
+              <p class="card-extra" id="card-extra"></p>
+              <p class="card-sentence" id="card-sentence"></p>
+            </div>
+          </div>
+          <div class="card-actions hidden" id="card-actions">
+            <button class="rating-btn again" data-rating="1">Again</button>
+            <button class="rating-btn hard" data-rating="2">Hard</button>
+            <button class="rating-btn good" data-rating="3">Good</button>
+            <button class="rating-btn easy" data-rating="4">Easy</button>
+          </div>
+          <p class="card-counter" id="card-counter"></p>
+        </div>
+      </section>
+
+      <!-- Quiz -->
+      <section id="quiz" class="view">
+        <div class="quiz-setup" id="quiz-setup">
+          <h3>Quiz Settings</h3>
+          <div class="quiz-options">
+            <label>Mode:
+              <select id="quiz-mode">
+                <option value="en_to_cn">English → 汉字</option>
+                <option value="en_to_pinyin">English → Pinyin</option>
+                <option value="cn_to_en">汉字 → English</option>
+                <option value="cn_to_pinyin">汉字 → Pinyin</option>
+              </select>
+            </label>
+            <label>Questions:
+              <select id="quiz-count">
+                <option value="10">10</option>
+                <option value="20">20</option>
+                <option value="50">50</option>
+              </select>
+            </label>
+          </div>
+          <button class="primary-btn" id="start-quiz">Start Quiz</button>
+        </div>
+        <div class="quiz-active hidden" id="quiz-active">
+          <div class="quiz-progress">
+            <span id="quiz-progress-text">1 / 10</span>
+            <span id="quiz-score-text">Score: 0</span>
+          </div>
+          <div class="quiz-question">
+            <p class="quiz-prompt" id="quiz-prompt"></p>
+            <p class="quiz-context-sentence" id="quiz-context-sentence"></p>
+          </div>
+          <div class="quiz-choices" id="quiz-choices"></div>
+          <div class="quiz-feedback hidden" id="quiz-feedback"></div>
+          <button class="primary-btn hidden" id="quiz-next">Next</button>
+        </div>
+        <div class="quiz-results hidden" id="quiz-results">
+          <h3>Quiz Complete!</h3>
+          <p class="quiz-final-score" id="quiz-final-score"></p>
+          <div id="quiz-wrong-list"></div>
+          <button class="primary-btn" id="quiz-restart">Try Again</button>
+        </div>
+      </section>
+
+      <!-- Browse -->
+      <section id="browse" class="view">
+        <div class="browse-controls">
+          <input type="text" id="search-input" placeholder="Search words...">
+          <select id="browse-level">
+            <option value="all">All Levels</option>
+            <option value="1">HSK 1</option>
+            <option value="2">HSK 2</option>
+            <option value="3">Class</option>
+          </select>
+        </div>
+        <div class="word-list" id="word-list"></div>
+      </section>
+
+      <!-- Stories -->
+      <section id="stories" class="view">
+        <div class="story-list" id="story-list"></div>
+        <div class="story-reader hidden" id="story-reader">
+          <button class="back-btn" id="story-back">← Back to stories</button>
+          <h2 class="story-title" id="story-title"></h2>
+          <div class="story-extra-vocab hidden" id="story-extra-vocab">
+            <h4>Extra vocabulary (beyond HSK 1/2):</h4>
+            <div id="story-extra-words"></div>
+          </div>
+          <div class="story-text" id="story-text"></div>
+          <div class="char-popup hidden" id="char-popup">
+            <span class="popup-pinyin" id="popup-pinyin"></span>
+            <span class="popup-english" id="popup-english"></span>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
