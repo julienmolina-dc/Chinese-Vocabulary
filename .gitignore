@@ -1,0 +1,6 @@
+target/
+progress.json
+material/
+.vscode/
+.DS_Store
+Secrets.toml
