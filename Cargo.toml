@@ -1,5 +1,5 @@
 [package]
-name = "hsk-learn"
+name = "julien-chinese-vocab"
 version = "0.1.0"
 edition = "2021"
 
@@ -10,6 +10,3 @@ serde_json = "1"
 chrono = { version = "0.4", features = ["serde"] }
 rand = "0.8"
 tokio = { version = "1", features = ["full"] }
-shuttle-runtime = "0.51"
-shuttle-actix-web = "0.51"
-shuttle-persist = "0.51"

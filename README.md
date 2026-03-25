@@ -23,17 +23,16 @@ Set a custom password:
 HSK_PASSWORD=mypassword cargo run
 ```
 
-## Deploy to Shuttle
+## Deploy to Render
 
-```bash
-cargo install cargo-shuttle
-cargo shuttle login
-cargo shuttle project start
-# Edit Secrets.toml with your password
-cargo shuttle deploy
-```
+1. Create a new Web Service on Render
+2. Connect your GitHub repo
+3. Set build command: `cargo build --release`
+4. Set start command: `./target/release/julien-chinese-vocab`
+5. Add environment variable: `HSK_PASSWORD` with your desired password
+6. Deploy
 
-Your app will be at `https://hsk-learn.shuttle.app`
+Your app will be at the URL provided by Render
 
 ## Features
 
@@ -43,4 +42,4 @@ Your app will be at `https://hsk-learn.shuttle.app`
 - Browsable word list (HSK 1 / HSK 2 / Class vocabulary)
 - 5 annotated Chinese stories (hover for pinyin, click for translation)
 - Password-protected access
-- Progress persists via Shuttle Persist
+- Progress persists to local file (note: data may be lost on redeploys if not using persistent storage)

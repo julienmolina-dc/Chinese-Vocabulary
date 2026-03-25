@@ -2,33 +2,37 @@ mod auth;
 mod data;
 mod stories;
 
-use actix_web::{get, post, web, HttpRequest, HttpResponse, Responder};
+use actix_web::{get, post, web, App, HttpServer, HttpRequest, HttpResponse, Responder};
 use data::{get_all_words, Word};
 use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
-use shuttle_persist::PersistInstance;
+use std::fs;
 use std::sync::{Arc, Mutex};
 
-const CARDS_KEY: &str = "srs_cards";
+const CARDS_KEY: &str = "srs_cards.json";
 
-fn load_cards(words: &[Word], persist: &PersistInstance) -> Vec<SrsCard> {
-    if let Ok(mut saved) = persist.load::<Vec<SrsCard>>(CARDS_KEY) {
-        let saved_ids: Vec<u32> = saved.iter().map(|c| c.word_id).collect();
-        for w in words {
-            if !saved_ids.contains(&w.id) {
-                saved.push(SrsCard::new(w.id));
+fn load_cards(words: &[Word]) -> Vec<SrsCard> {
+    if let Ok(contents) = fs::read_to_string(CARDS_KEY) {
+        if let Ok(mut saved) = serde_json::from_str::<Vec<SrsCard>>(&contents) {
+            let saved_ids: Vec<u32> = saved.iter().map(|c| c.word_id).collect();
+            for w in words {
+                if !saved_ids.contains(&w.id) {
+                    saved.push(SrsCard::new(w.id));
+                }
             }
+            println!("📂 Loaded {} cards from file", saved.len());
+            return saved;
         }
-        println!("📂 Loaded {} cards from persist", saved.len());
-        return saved;
     }
     println!("🆕 Starting fresh (no saved progress)");
     words.iter().map(|w| SrsCard::new(w.id)).collect()
 }
 
-fn save_cards(cards: &[SrsCard], persist: &PersistInstance) {
-    if let Err(e) = persist.save(CARDS_KEY, cards.to_vec()) {
-        eprintln!("⚠️  Failed to save progress: {}", e);
+fn save_cards(cards: &[SrsCard]) {
+    if let Ok(json) = serde_json::to_string(cards) {
+        if let Err(e) = fs::write(CARDS_KEY, json) {
+            eprintln!("⚠️  Failed to save progress: {}", e);
+        }
     }
 }
 
@@ -105,7 +109,6 @@ impl SrsCard {
 struct AppState {
     words: Vec<Word>,
     cards: Mutex<Vec<SrsCard>>,
-    persist: PersistInstance,
 }
 
 #[get("/api/words")]
@@ -210,7 +213,7 @@ async fn submit_review(
     if let Some(card) = cards.iter_mut().find(|c| c.word_id == body.word_id) {
         card.review(body.rating);
     }
-    save_cards(&cards, &state.persist);
+    save_cards(&cards);
     HttpResponse::Ok().json(serde_json::json!({"status": "ok"}))
 }
 
@@ -341,26 +344,26 @@ async fn get_story(path: web::Path<u32>) -> impl Responder {
     }
 }
 
-#[shuttle_runtime::main]
-async fn main(
-    #[shuttle_persist::Persist] persist: PersistInstance,
-) -> shuttle_actix_web::ShuttleActixWeb<impl FnOnce(&mut web::ServiceConfig) + Send + Clone> {
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
     let words = get_all_words();
-    let cards = load_cards(&words, &persist);
+    let cards = load_cards(&words);
 
     let state = web::Data::new(AppState {
         words,
         cards: Mutex::new(cards),
-        persist,
     });
 
     let password = std::env::var("HSK_PASSWORD").unwrap_or_else(|_| "hsk2025".to_string());
     let secret = Arc::new(password);
 
-    let config = move |cfg: &mut web::ServiceConfig| {
-        let secret_clone = secret.clone();
-        cfg.app_data(state.clone())
-            .app_data(web::Data::new(secret_clone.clone()))
+    let port = std::env::var("PORT").unwrap_or_else(|_| "8080".to_string());
+    let addr = format!("0.0.0.0:{}", port);
+
+    HttpServer::new(move || {
+        App::new()
+            .app_data(state.clone())
+            .app_data(web::Data::new(secret.clone()))
             .route("/login", web::get().to(auth::login_get))
             .route("/login", web::post().to(auth::login_post))
             .service(get_words)
@@ -373,8 +376,9 @@ async fn main(
             .service(get_story)
             .service(serve_js)
             .service(serve_css)
-            .default_service(web::get().to(serve_index));
-    };
-
-    Ok(config.into())
+            .default_service(web::get().to(serve_index))
+    })
+    .bind(&addr)?
+    .run()
+    .await
 }
