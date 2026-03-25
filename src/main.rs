@@ -2,7 +2,7 @@ mod auth;
 mod data;
 mod stories;
 
-use actix_web::{get, post, web, App, HttpServer, HttpRequest, HttpResponse, Responder};
+use actix_web::{get, post, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
 use data::{get_all_words, Word};
 use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
@@ -94,8 +94,7 @@ impl SrsCard {
                 if self.repetitions == 1 {
                     self.interval = 3;
                 } else {
-                    self.interval =
-                        (self.interval as f64 * self.ease_factor * 1.3) as u32;
+                    self.interval = (self.interval as f64 * self.ease_factor * 1.3) as u32;
                 }
                 self.ease_factor += 0.15;
                 self.box_level = (self.box_level + 1).min(4);
@@ -139,7 +138,10 @@ async fn get_stats(state: web::Data<AppState>) -> impl Responder {
     let now = chrono::Utc::now().timestamp();
     let total = state.words.len();
     let mastered = cards.iter().filter(|c| c.box_level >= 4).count();
-    let learning = cards.iter().filter(|c| c.repetitions > 0 && c.box_level < 4).count();
+    let learning = cards
+        .iter()
+        .filter(|c| c.repetitions > 0 && c.box_level < 4)
+        .count();
     let due = cards.iter().filter(|c| c.next_review <= now).count();
 
     HttpResponse::Ok().json(serde_json::json!({
@@ -170,7 +172,10 @@ async fn get_review_cards(
         .filter(|c| c.next_review <= now)
         .filter(|c| {
             if let Some(level) = query.level {
-                state.words.iter().any(|w| w.id == c.word_id && w.level == level)
+                state
+                    .words
+                    .iter()
+                    .any(|w| w.id == c.word_id && w.level == level)
             } else {
                 true
             }
@@ -178,9 +183,7 @@ async fn get_review_cards(
         .collect();
 
     // Prioritize: new cards first, then by box level (lowest first), then shuffle
-    due_cards.sort_by(|a, b| {
-        a.box_level.cmp(&b.box_level)
-    });
+    due_cards.sort_by(|a, b| a.box_level.cmp(&b.box_level));
     due_cards.truncate(limit);
 
     // Shuffle within same priority so order isn't predictable
@@ -225,10 +228,7 @@ struct QuizQuery {
 }
 
 #[get("/api/quiz")]
-async fn get_quiz(
-    state: web::Data<AppState>,
-    query: web::Query<QuizQuery>,
-) -> impl Responder {
+async fn get_quiz(state: web::Data<AppState>, query: web::Query<QuizQuery>) -> impl Responder {
     let count = query.count.unwrap_or(10);
     let mut rng = rand::thread_rng();
 
@@ -297,7 +297,9 @@ const APP_JS: &str = include_str!("../frontend/app.js");
 const STYLE_CSS: &str = include_str!("../frontend/style.css");
 
 fn is_authenticated(req: &HttpRequest) -> bool {
-    req.cookie("hsk_auth").map(|c| c.value() == "1").unwrap_or(false)
+    req.cookie("hsk_auth")
+        .map(|c| c.value() == "1")
+        .unwrap_or(false)
 }
 
 fn redirect_login() -> HttpResponse {
@@ -308,7 +310,9 @@ fn redirect_login() -> HttpResponse {
 
 #[get("/app.js")]
 async fn serve_js(req: HttpRequest) -> HttpResponse {
-    if !is_authenticated(&req) { return redirect_login(); }
+    if !is_authenticated(&req) {
+        return redirect_login();
+    }
     HttpResponse::Ok()
         .content_type("application/javascript; charset=utf-8")
         .body(APP_JS)
@@ -316,14 +320,18 @@ async fn serve_js(req: HttpRequest) -> HttpResponse {
 
 #[get("/style.css")]
 async fn serve_css(req: HttpRequest) -> HttpResponse {
-    if !is_authenticated(&req) { return redirect_login(); }
+    if !is_authenticated(&req) {
+        return redirect_login();
+    }
     HttpResponse::Ok()
         .content_type("text/css; charset=utf-8")
         .body(STYLE_CSS)
 }
 
 async fn serve_index(req: HttpRequest) -> HttpResponse {
-    if !is_authenticated(&req) { return redirect_login(); }
+    if !is_authenticated(&req) {
+        return redirect_login();
+    }
     HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
         .body(INDEX_HTML)
