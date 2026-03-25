@@ -4,3 +4,4 @@ material/
 .vscode/
 .DS_Store
 Secrets.toml
+*.Identifier
