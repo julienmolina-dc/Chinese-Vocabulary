@@ -28,7 +28,7 @@ fn load_cards(pool: &PgPool, words: &[Word]) -> tokio::task::JoinHandle<()> {
     })
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct SrsCard {
     word_id: u32,
     ease_factor: f64,
@@ -39,6 +39,18 @@ struct SrsCard {
 }
 
 impl SrsCard {
+    fn from_row(row: &sqlx::postgres::PgRow) -> sqlx::Result<Self> {
+        use sqlx::Row;
+        Ok(SrsCard {
+            word_id: row.try_get::<i32, _>("word_id")? as u32,
+            ease_factor: row.try_get("ease_factor")?,
+            interval: row.try_get::<i32, _>("interval")? as u32,
+            repetitions: row.try_get::<i32, _>("repetitions")? as u32,
+            next_review: row.try_get("next_review")?,
+            box_level: row.try_get::<i16, _>("box_level")? as u8,
+        })
+    }
+
     fn new(word_id: u32) -> Self {
         SrsCard {
             word_id,
@@ -173,7 +185,7 @@ async fn get_review_cards(
     let now = chrono::Utc::now().timestamp();
     let limit = query.limit.unwrap_or(20);
 
-    let due_cards: Vec<SrsCard> = sqlx::query_as::<_, SrsCard>(
+    let rows = sqlx::query(
         "SELECT word_id, ease_factor, interval, repetitions, next_review, box_level 
          FROM srs_cards 
          WHERE next_review <= $1
@@ -185,6 +197,11 @@ async fn get_review_cards(
     .fetch_all(&state.pool)
     .await
     .unwrap_or_default();
+
+    let mut due_cards: Vec<SrsCard> = rows
+        .iter()
+        .filter_map(|row| SrsCard::from_row(row).ok())
+        .collect();
 
     // Filter by level if specified
     let filtered_cards: Vec<SrsCard> = if let Some(level) = query.level {
@@ -222,7 +239,7 @@ async fn submit_review(
     body: web::Json<ReviewSubmit>,
 ) -> impl Responder {
     // Get current card data from database
-    let card: Option<SrsCard> = sqlx::query_as(
+    let row = sqlx::query(
         "SELECT word_id, ease_factor, interval, repetitions, next_review, box_level 
          FROM srs_cards WHERE word_id = $1"
     )
@@ -231,23 +248,25 @@ async fn submit_review(
     .await
     .unwrap_or(None);
 
-    if let Some(mut card) = card {
-        card.review(body.rating);
+    if let Some(row) = row {
+        if let Ok(mut card) = SrsCard::from_row(&row) {
+            card.review(body.rating);
 
-        // Update in database
-        let _ = sqlx::query(
-            "UPDATE srs_cards SET ease_factor = $1, interval = $2, repetitions = $3, 
-             next_review = $4, box_level = $5, updated_at = CURRENT_TIMESTAMP 
-             WHERE word_id = $6"
-        )
-        .bind(card.ease_factor)
-        .bind(card.interval as i32)
-        .bind(card.repetitions as i32)
-        .bind(card.next_review)
-        .bind(card.box_level as i16)
-        .bind(body.word_id as i32)
-        .execute(&state.pool)
-        .await;
+            // Update in database
+            let _ = sqlx::query(
+                "UPDATE srs_cards SET ease_factor = $1, interval = $2, repetitions = $3, 
+                 next_review = $4, box_level = $5, updated_at = CURRENT_TIMESTAMP 
+                 WHERE word_id = $6"
+            )
+            .bind(card.ease_factor)
+            .bind(card.interval as i32)
+            .bind(card.repetitions as i32)
+            .bind(card.next_review)
+            .bind(card.box_level as i16)
+            .bind(body.word_id as i32)
+            .execute(&state.pool)
+            .await;
+        }
     }
 
     HttpResponse::Ok().json(serde_json::json!({"status": "ok"}))
