@@ -6,37 +6,29 @@ use actix_web::{get, post, web, App, HttpRequest, HttpResponse, HttpServer, Resp
 use data::{get_all_words, Word};
 use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
-use std::fs;
-use std::sync::{Arc, Mutex};
+use sqlx::postgres::PgPoolOptions;
+use sqlx::PgPool;
+use std::sync::Arc;
 
-const CARDS_KEY: &str = "srs_cards.json";
-
-fn load_cards(words: &[Word]) -> Vec<SrsCard> {
-    if let Ok(contents) = fs::read_to_string(CARDS_KEY) {
-        if let Ok(mut saved) = serde_json::from_str::<Vec<SrsCard>>(&contents) {
-            let saved_ids: Vec<u32> = saved.iter().map(|c| c.word_id).collect();
-            for w in words {
-                if !saved_ids.contains(&w.id) {
-                    saved.push(SrsCard::new(w.id));
-                }
-            }
-            println!("📂 Loaded {} cards from file", saved.len());
-            return saved;
+fn load_cards(pool: &PgPool, words: &[Word]) -> tokio::task::JoinHandle<()> {
+    // Initialize cards in the database for new words
+    let pool = pool.clone();
+    let words = words.to_vec();
+    tokio::spawn(async move {
+        for word in words {
+            let _ = sqlx::query(
+                "INSERT INTO srs_cards (word_id, ease_factor, interval, repetitions, next_review, box_level)
+                 VALUES ($1, 2.5, 0, 0, 0, 0)
+                 ON CONFLICT (word_id) DO NOTHING"
+            )
+            .bind(word.id as i32)
+            .execute(&pool)
+            .await;
         }
-    }
-    println!("🆕 Starting fresh (no saved progress)");
-    words.iter().map(|w| SrsCard::new(w.id)).collect()
+    })
 }
 
-fn save_cards(cards: &[SrsCard]) {
-    if let Ok(json) = serde_json::to_string(cards) {
-        if let Err(e) = fs::write(CARDS_KEY, json) {
-            eprintln!("⚠️  Failed to save progress: {}", e);
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 struct SrsCard {
     word_id: u32,
     ease_factor: f64,
@@ -107,7 +99,7 @@ impl SrsCard {
 
 struct AppState {
     words: Vec<Word>,
-    cards: Mutex<Vec<SrsCard>>,
+    pool: PgPool,
 }
 
 #[get("/api/words")]
@@ -134,21 +126,36 @@ async fn get_words_by_level(
 
 #[get("/api/stats")]
 async fn get_stats(state: web::Data<AppState>) -> impl Responder {
-    let cards = state.cards.lock().unwrap();
     let now = chrono::Utc::now().timestamp();
     let total = state.words.len();
-    let mastered = cards.iter().filter(|c| c.box_level >= 4).count();
-    let learning = cards
-        .iter()
-        .filter(|c| c.repetitions > 0 && c.box_level < 4)
-        .count();
-    let due = cards.iter().filter(|c| c.next_review <= now).count();
+
+    let mastered = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM srs_cards WHERE box_level >= 4"
+    )
+    .fetch_one(&state.pool)
+    .await
+    .unwrap_or(0);
+
+    let learning = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM srs_cards WHERE repetitions > 0 AND box_level < 4"
+    )
+    .fetch_one(&state.pool)
+    .await
+    .unwrap_or(0);
+
+    let due = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM srs_cards WHERE next_review <= $1"
+    )
+    .bind(now)
+    .fetch_one(&state.pool)
+    .await
+    .unwrap_or(0);
 
     HttpResponse::Ok().json(serde_json::json!({
         "total": total,
-        "mastered": mastered,
-        "learning": learning,
-        "due": due,
+        "mastered": mastered as usize,
+        "learning": learning as usize,
+        "due": due as usize,
     }))
 }
 
@@ -163,35 +170,37 @@ async fn get_review_cards(
     state: web::Data<AppState>,
     query: web::Query<ReviewQuery>,
 ) -> impl Responder {
-    let cards = state.cards.lock().unwrap();
     let now = chrono::Utc::now().timestamp();
     let limit = query.limit.unwrap_or(20);
 
-    let mut due_cards: Vec<&SrsCard> = cards
-        .iter()
-        .filter(|c| c.next_review <= now)
-        .filter(|c| {
-            if let Some(level) = query.level {
-                state
-                    .words
-                    .iter()
-                    .any(|w| w.id == c.word_id && w.level == level)
-            } else {
-                true
-            }
-        })
-        .collect();
+    let due_cards: Vec<SrsCard> = sqlx::query_as::<_, SrsCard>(
+        "SELECT word_id, ease_factor, interval, repetitions, next_review, box_level 
+         FROM srs_cards 
+         WHERE next_review <= $1
+         ORDER BY box_level ASC, next_review ASC
+         LIMIT $2"
+    )
+    .bind(now)
+    .bind(limit as i32)
+    .fetch_all(&state.pool)
+    .await
+    .unwrap_or_default();
 
-    // Prioritize: new cards first, then by box level (lowest first), then shuffle
-    due_cards.sort_by(|a, b| a.box_level.cmp(&b.box_level));
-    due_cards.truncate(limit);
+    // Filter by level if specified
+    let filtered_cards: Vec<SrsCard> = if let Some(level) = query.level {
+        due_cards
+            .into_iter()
+            .filter(|c| state.words.iter().any(|w| w.id == c.word_id && w.level == level))
+            .collect()
+    } else {
+        due_cards
+    };
 
-    // Shuffle within same priority so order isn't predictable
-    use rand::seq::SliceRandom;
     let mut rng = rand::thread_rng();
-    due_cards.shuffle(&mut rng);
+    let mut shuffled = filtered_cards;
+    shuffled.shuffle(&mut rng);
 
-    let word_ids: Vec<u32> = due_cards.iter().map(|c| c.word_id).collect();
+    let word_ids: Vec<u32> = shuffled.iter().map(|c| c.word_id).collect();
     let review_words: Vec<&Word> = state
         .words
         .iter()
@@ -212,11 +221,35 @@ async fn submit_review(
     state: web::Data<AppState>,
     body: web::Json<ReviewSubmit>,
 ) -> impl Responder {
-    let mut cards = state.cards.lock().unwrap();
-    if let Some(card) = cards.iter_mut().find(|c| c.word_id == body.word_id) {
+    // Get current card data from database
+    let card: Option<SrsCard> = sqlx::query_as(
+        "SELECT word_id, ease_factor, interval, repetitions, next_review, box_level 
+         FROM srs_cards WHERE word_id = $1"
+    )
+    .bind(body.word_id as i32)
+    .fetch_optional(&state.pool)
+    .await
+    .unwrap_or(None);
+
+    if let Some(mut card) = card {
         card.review(body.rating);
+
+        // Update in database
+        let _ = sqlx::query(
+            "UPDATE srs_cards SET ease_factor = $1, interval = $2, repetitions = $3, 
+             next_review = $4, box_level = $5, updated_at = CURRENT_TIMESTAMP 
+             WHERE word_id = $6"
+        )
+        .bind(card.ease_factor)
+        .bind(card.interval as i32)
+        .bind(card.repetitions as i32)
+        .bind(card.next_review)
+        .bind(card.box_level as i16)
+        .bind(body.word_id as i32)
+        .execute(&state.pool)
+        .await;
     }
-    save_cards(&cards);
+
     HttpResponse::Ok().json(serde_json::json!({"status": "ok"}))
 }
 
@@ -354,12 +387,51 @@ async fn get_story(path: web::Path<u32>) -> impl Responder {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    dotenvy::dotenv().ok();
+    
+    let database_url = std::env::var("DATABASE_URL")
+        .unwrap_or_else(|_| "postgres://user:password@localhost/hsk".to_string());
+
+    let pool = PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&database_url)
+        .await
+        .expect("Failed to connect to database");
+
+    // Run migrations
+    let _ = sqlx::query(
+        "CREATE TABLE IF NOT EXISTS srs_cards (
+            word_id INTEGER PRIMARY KEY,
+            ease_factor FLOAT NOT NULL DEFAULT 2.5,
+            interval INTEGER NOT NULL DEFAULT 0,
+            repetitions INTEGER NOT NULL DEFAULT 0,
+            next_review BIGINT NOT NULL DEFAULT 0,
+            box_level SMALLINT NOT NULL DEFAULT 0,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        )"
+    )
+    .execute(&pool)
+    .await;
+
+    let _ = sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_next_review ON srs_cards(next_review)"
+    )
+    .execute(&pool)
+    .await;
+
+    let _ = sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_box_level ON srs_cards(box_level)"
+    )
+    .execute(&pool)
+    .await;
+
     let words = get_all_words();
-    let cards = load_cards(&words);
+    let _init = load_cards(&pool, &words);
 
     let state = web::Data::new(AppState {
         words,
-        cards: Mutex::new(cards),
+        pool: pool.clone(),
     });
 
     let password = std::env::var("HSK_PASSWORD").unwrap_or_else(|_| "hsk2025".to_string());
@@ -367,6 +439,8 @@ async fn main() -> std::io::Result<()> {
 
     let port = std::env::var("PORT").unwrap_or_else(|_| "8080".to_string());
     let addr = format!("0.0.0.0:{}", port);
+
+    println!("🚀 Starting server on http://{}", addr);
 
     HttpServer::new(move || {
         App::new()
