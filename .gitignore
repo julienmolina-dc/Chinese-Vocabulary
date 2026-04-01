@@ -5,3 +5,4 @@ material/
 .DS_Store
 Secrets.toml
 *.Identifier
+.env
