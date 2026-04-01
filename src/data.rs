@@ -441,5 +441,16 @@ pub fn get_all_words() -> Vec<Word> {
         Word { id: 408, hanzi: "大家".into(), pinyin: "dàjiā".into(), english: "everyone".into(), level: 3, sentence_cn: "大家好！".into(), sentence_pinyin: "Dàjiā hǎo!".into(), sentence_en: "Hello everyone!".into() },
         Word { id: 409, hanzi: "和平".into(), pinyin: "hépíng".into(), english: "peace".into(), level: 3, sentence_cn: "我们希望和平。".into(), sentence_pinyin: "Wǒmen xīwàng hépíng.".into(), sentence_en: "We hope for peace.".into() },
         Word { id: 410, hanzi: "至少".into(), pinyin: "zhìshǎo".into(), english: "at least".into(), level: 3, sentence_cn: "至少要一个小时。".into(), sentence_pinyin: "Zhìshǎo yào yí gè xiǎoshí.".into(), sentence_en: "At least one hour.".into() },
+        // New words from Course 29
+        Word { id: 411, hanzi: "节日".into(), pinyin: "jiérì".into(), english: "festival; holiday".into(), level: 3, sentence_cn: "春节是一个重要的节日。".into(), sentence_pinyin: "Chūnjié shì yí gè zhòngyào de jiérì.".into(), sentence_en: "Spring Festival is an important holiday.".into() },
+        Word { id: 412, hanzi: "复活节".into(), pinyin: "fùhuó jié".into(), english: "Easter".into(), level: 3, sentence_cn: "复活节在春天。".into(), sentence_pinyin: "Fùhuó jié zài chūntiān.".into(), sentence_en: "Easter is in spring.".into() },
+        Word { id: 413, hanzi: "圣诞节".into(), pinyin: "shèngdàn jié".into(), english: "Christmas".into(), level: 3, sentence_cn: "圣诞节是十二月二十五号。".into(), sentence_pinyin: "Shèngdàn jié shì shí'èr yuè èrshíwǔ hào.".into(), sentence_en: "Christmas is December 25.".into() },
+        Word { id: 414, hanzi: "摄像头".into(), pinyin: "shèxiàng tóu".into(), english: "camera".into(), level: 3, sentence_cn: "这个摄像头很清楚。".into(), sentence_pinyin: "Zhège shèxiàng tóu hěn qīngchu.".into(), sentence_en: "This camera is very clear.".into() },
+        Word { id: 415, hanzi: "视频".into(), pinyin: "shìpín".into(), english: "video".into(), level: 3, sentence_cn: "我们进行视频会议。".into(), sentence_pinyin: "Wǒmen jìnxíng shìpín huìyì.".into(), sentence_en: "We are having a video conference.".into() },
+        Word { id: 416, hanzi: "过敏".into(), pinyin: "guòmǐn".into(), english: "allergy; to be allergic".into(), level: 3, sentence_cn: "我对花粉过敏。".into(), sentence_pinyin: "Wǒ duì huāhuǎ guòmǐn.".into(), sentence_en: "I'm allergic to pollen.".into() },
+        Word { id: 417, hanzi: "气候".into(), pinyin: "qìhòu".into(), english: "climate".into(), level: 3, sentence_cn: "中国的气候很复杂。".into(), sentence_pinyin: "Zhōngguó de qìhòu hěn fùzá.".into(), sentence_en: "China's climate is complex.".into() },
+        Word { id: 418, hanzi: "记忆".into(), pinyin: "jìyì".into(), english: "memory".into(), level: 3, sentence_cn: "他有很好的记忆力。".into(), sentence_pinyin: "Tā yǒu hěnhǎo de jìyìlì.".into(), sentence_en: "He has a good memory.".into() },
+        Word { id: 419, hanzi: "会议".into(), pinyin: "huìyì".into(), english: "meeting; conference".into(), level: 3, sentence_cn: "今天下午有会议。".into(), sentence_pinyin: "Jīntiān xiàwǔ yǒu huìyì.".into(), sentence_en: "There is a meeting this afternoon.".into() },
+        Word { id: 420, hanzi: "会议室".into(), pinyin: "huìyì shì".into(), english: "meeting room".into(), level: 3, sentence_cn: "会议在会议室里。".into(), sentence_pinyin: "Huìyì zài huìyì shì lǐ.".into(), sentence_en: "The meeting is in the meeting room.".into() },
     ]
 }
