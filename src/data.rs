@@ -452,5 +452,19 @@ pub fn get_all_words() -> Vec<Word> {
         Word { id: 418, hanzi: "记忆".into(), pinyin: "jìyì".into(), english: "memory".into(), level: 3, sentence_cn: "他有很好的记忆力。".into(), sentence_pinyin: "Tā yǒu hěnhǎo de jìyìlì.".into(), sentence_en: "He has a good memory.".into() },
         Word { id: 419, hanzi: "会议".into(), pinyin: "huìyì".into(), english: "meeting; conference".into(), level: 3, sentence_cn: "今天下午有会议。".into(), sentence_pinyin: "Jīntiān xiàwǔ yǒu huìyì.".into(), sentence_en: "There is a meeting this afternoon.".into() },
         Word { id: 420, hanzi: "会议室".into(), pinyin: "huìyì shì".into(), english: "meeting room".into(), level: 3, sentence_cn: "会议在会议室里。".into(), sentence_pinyin: "Huìyì zài huìyì shì lǐ.".into(), sentence_en: "The meeting is in the meeting room.".into() },
+        // New words from Course 30
+        Word { id: 421, hanzi: "语法".into(), pinyin: "yǔfǎ".into(), english: "grammar".into(), level: 3, sentence_cn: "我在学习语法。".into(), sentence_pinyin: "Wǒ zài xuéxí yǔfǎ.".into(), sentence_en: "I am studying grammar.".into() },
+        Word { id: 422, hanzi: "刻".into(), pinyin: "kè".into(), english: "quarter (of an hour)".into(), level: 3, sentence_cn: "两点一刻。".into(), sentence_pinyin: "Liǎng diǎn yí kè.".into(), sentence_en: "A quarter past two.".into() },
+        Word { id: 423, hanzi: "口语".into(), pinyin: "kǒuyǔ".into(), english: "spoken language".into(), level: 3, sentence_cn: "我练习口语。".into(), sentence_pinyin: "Wǒ liànxí kǒuyǔ.".into(), sentence_en: "I practice spoken language.".into() },
+        Word { id: 424, hanzi: "变".into(), pinyin: "biàn".into(), english: "to change".into(), level: 3, sentence_cn: "天气变了。".into(), sentence_pinyin: "Tiānqì biàn le.".into(), sentence_en: "The weather changed.".into() },
+        Word { id: 425, hanzi: "换".into(), pinyin: "huàn".into(), english: "to exchange, to change".into(), level: 3, sentence_cn: "我换了手机。".into(), sentence_pinyin: "Wǒ huàn le shǒujī.".into(), sentence_en: "I changed my phone.".into() },
+        Word { id: 426, hanzi: "改变".into(), pinyin: "gǎi biàn".into(), english: "to change, to alter".into(), level: 3, sentence_cn: "我改变了主意。".into(), sentence_pinyin: "Wǒ gǎibiàn le zhǔyì.".into(), sentence_en: "I changed my mind.".into() },
+        Word { id: 427, hanzi: "左右".into(), pinyin: "zuǒ yòu".into(), english: "about, approximately".into(), level: 3, sentence_cn: "三十岁左右。".into(), sentence_pinyin: "Sānshí suì zuǒyòu.".into(), sentence_en: "About thirty years old.".into() },
+        Word { id: 428, hanzi: "专业".into(), pinyin: "zhuānyè".into(), english: "major, specialty".into(), level: 3, sentence_cn: "我学中文专业。".into(), sentence_pinyin: "Wǒ xué Zhōngwén zhuānyè.".into(), sentence_en: "I study Chinese as my major.".into() },
+        Word { id: 429, hanzi: "主意".into(), pinyin: "zhǔyì".into(), english: "idea".into(), level: 3, sentence_cn: "这是个好主意。".into(), sentence_pinyin: "Zhè shì gè hǎo zhǔyì.".into(), sentence_en: "This is a good idea.".into() },
+        Word { id: 430, hanzi: "注意".into(), pinyin: "zhùyì".into(), english: "to pay attention".into(), level: 3, sentence_cn: "请注意安全。".into(), sentence_pinyin: "Qǐng zhùyì ānquán.".into(), sentence_en: "Please pay attention to safety.".into() },
+        Word { id: 431, hanzi: "博物馆".into(), pinyin: "bó wù guǎn".into(), english: "museum".into(), level: 3, sentence_cn: "我们去博物馆。".into(), sentence_pinyin: "Wǒmen qù bó wù guǎn.".into(), sentence_en: "We go to the museum.".into() },
+        Word { id: 432, hanzi: "班".into(), pinyin: "bān".into(), english: "class, team".into(), level: 3, sentence_cn: "我们班有三十个人。".into(), sentence_pinyin: "Wǒmen bān yǒu sānshí gè rén.".into(), sentence_en: "Our class has thirty people.".into() },
+        Word { id: 433, hanzi: "法语".into(), pinyin: "Fǎyǔ".into(), english: "French language".into(), level: 3, sentence_cn: "我学法语。".into(), sentence_pinyin: "Wǒ xué Fǎyǔ.".into(), sentence_en: "I study French.".into() },
     ]
 }
