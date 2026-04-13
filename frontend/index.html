@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Julien's Chinese Vocabulary</title>
   <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
   <div id="app">
@@ -22,37 +23,67 @@
     <main>
       <!-- Dashboard -->
       <section id="dashboard" class="view active">
-        <div class="stats-grid">
-          <div class="stat-card">
-            <span class="stat-number" id="total-words">0</span>
-            <span class="stat-label">Total Words</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-number" id="mastered-words">0</span>
-            <span class="stat-label">Mastered</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-number" id="learning-words">0</span>
-            <span class="stat-label">Learning</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-number" id="due-words">0</span>
-            <span class="stat-label">Due for Review</span>
+        <div class="progress-overview">
+          <h2>Learning Progress</h2>
+          <div class="progress-stages">
+            <div class="stage-card new-stage" data-stage="new">
+              <div class="stage-icon">🆕</div>
+              <div class="stage-count" id="new-count">0</div>
+              <div class="stage-label">New</div>
+            </div>
+            <div class="stage-card learning-stage" data-stage="learning">
+              <div class="stage-icon">📚</div>
+              <div class="stage-count" id="learning-count">0</div>
+              <div class="stage-label">Learning</div>
+            </div>
+            <div class="stage-card review-stage" data-stage="review">
+              <div class="stage-icon">🔄</div>
+              <div class="stage-count" id="review-count">0</div>
+              <div class="stage-label">Review</div>
+            </div>
+            <div class="stage-card mastered-stage" data-stage="mastered">
+              <div class="stage-icon">✅</div>
+              <div class="stage-count" id="mastered-count">0</div>
+              <div class="stage-label">Mastered</div>
+            </div>
+            <div class="stage-card relearning-stage" data-stage="relearning">
+              <div class="stage-icon">🔙</div>
+              <div class="stage-count" id="relearning-count">0</div>
+              <div class="stage-label">Relearning</div>
+            </div>
           </div>
         </div>
+
+        <div class="activity-metrics">
+          <div class="metric-card">
+            <span class="metric-value" id="due-today">0</span>
+            <span class="metric-label">Due Today</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-value" id="studied-today">0</span>
+            <span class="metric-label">Studied Today</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-value" id="retention-rate">0%</span>
+            <span class="metric-label">7-Day Retention</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-value" id="study-streak">0</span>
+            <span class="metric-label">Day Streak</span>
+          </div>
+        </div>
+
+        <div class="progress-chart">
+          <canvas id="progress-chart-canvas"></canvas>
+        </div>
+
         <div class="level-filter">
           <button class="filter-btn active" data-level="all">All</button>
           <button class="filter-btn" data-level="1">HSK 1</button>
           <button class="filter-btn" data-level="2">HSK 2</button>
           <button class="filter-btn" data-level="3">Class</button>
         </div>
-        <div class="progress-section">
-          <h3>Progress</h3>
-          <div class="progress-bar-container">
-            <div class="progress-bar" id="progress-bar"></div>
-          </div>
-          <p id="progress-text">0% complete</p>
-        </div>
+
         <button class="primary-btn" id="start-review">Start Review Session</button>
       </section>
 
@@ -87,6 +118,10 @@
             <button class="rating-btn easy" data-rating="4">Easy</button>
           </div>
           <p class="card-counter" id="card-counter"></p>
+          <div class="session-controls hidden" id="session-controls">
+            <button class="secondary-btn" id="extend-session-btn">Extend Session</button>
+            <button class="secondary-btn" id="end-session-btn">End Early</button>
+          </div>
         </div>
       </section>
 
@@ -165,6 +200,48 @@
           </div>
         </div>
       </section>
+
+      <!-- Session Configuration Modal -->
+      <div id="session-config-modal" class="modal hidden">
+        <div class="modal-content">
+          <h3>Review Session Settings</h3>
+          <div class="session-config">
+            <div class="config-group">
+              <label for="session-type">Session Type:</label>
+              <select id="session-type">
+                <option value="standard">Standard Review (Due Cards)</option>
+                <option value="new_only">New Cards Only</option>
+                <option value="mixed">Mixed (New + Review)</option>
+              </select>
+            </div>
+
+            <div class="config-group">
+              <label for="card-limit">Number of Cards:</label>
+              <input type="range" id="card-limit" min="5" max="500" value="20" step="5">
+              <span id="card-limit-value">20</span>
+            </div>
+
+            <div class="config-group">
+              <label for="level-filter">HSK Level:</label>
+              <select id="level-filter">
+                <option value="all">All Levels</option>
+                <option value="1">HSK 1</option>
+                <option value="2">HSK 2</option>
+                <option value="3">HSK 3+</option>
+              </select>
+            </div>
+
+            <div class="estimated-time">
+              <p>Estimated session time: <span id="estimated-time">10-15 minutes</span></p>
+            </div>
+          </div>
+
+          <div class="modal-actions">
+            <button id="start-session-btn" class="primary-btn">Start Session</button>
+            <button id="cancel-session-btn" class="secondary-btn">Cancel</button>
+          </div>
+        </div>
+      </div>
     </main>
   </div>
   <script src="app.js"></script>

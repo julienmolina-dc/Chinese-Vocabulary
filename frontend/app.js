@@ -25,6 +25,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupStudy();
   setupQuiz();
   setupBrowse();
+  setupSessionControls();
 });
 
 async function loadWords() {
@@ -62,32 +63,106 @@ function setupNav() {
 // ---- Dashboard ----
 async function updateDashboard() {
   try {
-    const res = await fetch(`${API}/stats`);
+    const res = await fetch(`${API}/progress-stats`);
     const stats = await res.json();
-    document.getElementById('total-words').textContent = stats.total;
-    document.getElementById('mastered-words').textContent = stats.mastered;
-    document.getElementById('learning-words').textContent = stats.learning;
-    document.getElementById('due-words').textContent = stats.due;
 
-    const pct = stats.total > 0 ? Math.round((stats.mastered / stats.total) * 100) : 0;
-    document.getElementById('progress-bar').style.width = pct + '%';
-    document.getElementById('progress-text').textContent = pct + '% mastered';
-  } catch {
-    // Use local data
-    const filtered = getFilteredWords();
-    document.getElementById('total-words').textContent = filtered.length;
-    document.getElementById('mastered-words').textContent = 0;
-    document.getElementById('learning-words').textContent = 0;
-    document.getElementById('due-words').textContent = filtered.length;
+    // Update stage counts
+    document.getElementById('new-count').textContent = stats.new;
+    document.getElementById('learning-count').textContent = stats.learning;
+    document.getElementById('review-count').textContent = stats.review;
+    document.getElementById('mastered-count').textContent = stats.mastered;
+    document.getElementById('relearning-count').textContent = stats.relearning;
+
+    // Update metrics
+    document.getElementById('due-today').textContent = stats.due_today;
+    document.getElementById('studied-today').textContent = stats.studied_today;
+    document.getElementById('retention-rate').textContent = Math.round(stats.retention_rate_7d * 100) + '%';
+    document.getElementById('study-streak').textContent = stats.study_streak;
+
+    // Update chart
+    updateProgressChart(stats);
+
+  } catch (error) {
+    console.error('Failed to load progress stats:', error);
+    // Fallback to basic stats
+    try {
+      const res = await fetch(`${API}/stats`);
+      const stats = await res.json();
+      document.getElementById('new-count').textContent = '0';
+      document.getElementById('learning-count').textContent = stats.learning;
+      document.getElementById('review-count').textContent = '0';
+      document.getElementById('mastered-count').textContent = stats.mastered;
+      document.getElementById('relearning-count').textContent = '0';
+      document.getElementById('due-today').textContent = stats.due;
+      document.getElementById('studied-today').textContent = '0';
+      document.getElementById('retention-rate').textContent = '0%';
+      document.getElementById('study-streak').textContent = '0';
+    } catch {
+      // Use local data
+      const filtered = getFilteredWords();
+      document.getElementById('new-count').textContent = filtered.length;
+      document.getElementById('learning-count').textContent = '0';
+      document.getElementById('review-count').textContent = '0';
+      document.getElementById('mastered-count').textContent = '0';
+      document.getElementById('relearning-count').textContent = '0';
+      document.getElementById('due-today').textContent = filtered.length;
+      document.getElementById('studied-today').textContent = '0';
+      document.getElementById('retention-rate').textContent = '0%';
+      document.getElementById('study-streak').textContent = '0';
+    }
   }
 
-  document.getElementById('start-review').onclick = () => {
-    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-    document.querySelector('[data-view="study"]').classList.add('active');
-    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-    document.getElementById('study').classList.add('active');
-    startReview();
-  };
+  // Add stage card click handlers
+  document.querySelectorAll('.stage-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const stage = card.dataset.stage;
+      // TODO: Implement stage filtering logic
+      console.log('Filter by stage:', stage);
+    });
+  });
+}
+
+function updateProgressChart(stats) {
+  const ctx = document.getElementById('progress-chart-canvas').getContext('2d');
+
+  // Destroy existing chart if it exists
+  if (window.progressChart) {
+    window.progressChart.destroy();
+  }
+
+  window.progressChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['New', 'Learning', 'Review', 'Mastered', 'Relearning'],
+      datasets: [{
+        data: [stats.new, stats.learning, stats.review, stats.mastered, stats.relearning],
+        backgroundColor: ['#3498db', '#f39c12', '#9b59b6', '#27ae60', '#e74c3c'],
+        borderWidth: 2,
+        borderColor: 'rgba(255,255,255,0.1)'
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            color: '#eee',
+            padding: 20,
+            usePointStyle: true
+          }
+        },
+        tooltip: {
+          backgroundColor: 'rgba(26,26,46,0.9)',
+          titleColor: '#eee',
+          bodyColor: '#eee',
+          borderColor: 'rgba(255,255,255,0.1)',
+          borderWidth: 1
+        }
+      }
+    }
+  });
 }
 
 function getFilteredWords() {
@@ -113,27 +188,133 @@ function setupStudy() {
 }
 
 async function startReview() {
+  // Show configuration modal instead of directly starting
+  showSessionConfigModal();
+}
+
+function showSessionConfigModal() {
+  const modal = document.getElementById('session-config-modal');
+  modal.classList.remove('hidden');
+
+  // Update card limit display
+  const limitInput = document.getElementById('card-limit');
+  const limitValue = document.getElementById('card-limit-value');
+  limitInput.addEventListener('input', () => {
+    limitValue.textContent = limitInput.value;
+    updateEstimatedTime();
+  });
+
+  // Handle start session
+  document.getElementById('start-session-btn').addEventListener('click', () => {
+    const config = {
+      sessionType: document.getElementById('session-type').value,
+      limit: parseInt(document.getElementById('card-limit').value),
+      level: document.getElementById('level-filter').value
+    };
+    modal.classList.add('hidden');
+    startConfiguredSession(config);
+  });
+
+  document.getElementById('cancel-session-btn').addEventListener('click', () => {
+    modal.classList.add('hidden');
+  });
+}
+
+async function startConfiguredSession(config) {
   try {
-    const levelParam = currentLevel !== 'all' ? `&level=${currentLevel}` : '';
-    const res = await fetch(`${API}/review?limit=20${levelParam}`);
+    const params = new URLSearchParams({
+      limit: config.limit,
+      session_type: config.sessionType,
+      ...(config.level !== 'all' && { level: config.level })
+    });
+
+    const res = await fetch(`${API}/review?${params}`);
     reviewQueue = await res.json();
-  } catch {
-    reviewQueue = [...getFilteredWords()];
-  }
 
-  // Always shuffle so we don't learn in order
-  reviewQueue = shuffle(reviewQueue);
-  if (reviewQueue.length > 20) reviewQueue = reviewQueue.slice(0, 20);
+    // Shuffle for mixed sessions
+    if (config.sessionType === 'mixed') {
+      reviewQueue = shuffle(reviewQueue);
+    }
 
-  reviewIndex = 0;
-  if (reviewQueue.length === 0) {
-    document.getElementById('card-prompt').textContent = 'No cards due for review! 🎉';
-    document.getElementById('card-context').textContent = '';
-    document.getElementById('card-actions').classList.add('hidden');
-    document.getElementById('card-counter').textContent = '';
-    return;
+    reviewIndex = 0;
+    sessionConfig = config; // Store for session management
+
+    if (reviewQueue.length === 0) {
+      showNoCardsMessage();
+      return;
+    }
+
+    showCard();
+    updateSessionProgress();
+  } catch (error) {
+    console.error('Failed to start session:', error);
   }
-  showCard();
+}
+
+function updateSessionProgress() {
+  const progress = document.getElementById('session-progress');
+  if (progress) {
+    progress.textContent = `${reviewIndex + 1} / ${reviewQueue.length}`;
+  }
+}
+
+function updateEstimatedTime() {
+  const limit = parseInt(document.getElementById('card-limit').value);
+  const avgTimePerCard = 30; // seconds
+  const totalSeconds = limit * avgTimePerCard;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  document.getElementById('estimated-time').textContent =
+    `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+function showNoCardsMessage() {
+  document.getElementById('card-prompt').textContent = 'No cards available for this session type! 🎉';
+  document.getElementById('card-context').textContent = '';
+  document.getElementById('card-actions').classList.add('hidden');
+  document.getElementById('card-counter').textContent = '';
+  document.getElementById('session-controls').classList.add('hidden');
+}
+
+// Session controls
+function setupSessionControls() {
+  document.getElementById('extend-session-btn').addEventListener('click', extendSession);
+  document.getElementById('end-session-btn').addEventListener('click', endSessionEarly);
+}
+
+async function extendSession() {
+  if (!sessionConfig) return;
+
+  try {
+    // Get additional cards based on session type
+    const params = new URLSearchParams({
+      limit: 10, // Add 10 more cards
+      session_type: sessionConfig.sessionType,
+      ...(sessionConfig.level !== 'all' && { level: sessionConfig.level })
+    });
+
+    const res = await fetch(`${API}/review?${params}`);
+    const additionalCards = await res.json();
+
+    if (additionalCards.length > 0) {
+      // Shuffle and add to queue
+      const shuffled = shuffle(additionalCards);
+      reviewQueue.push(...shuffled);
+      document.getElementById('extend-session-btn').textContent = 'Extended!';
+      setTimeout(() => {
+        document.getElementById('extend-session-btn').textContent = 'Extend Session';
+      }, 2000);
+    }
+  } catch (error) {
+    console.error('Failed to extend session:', error);
+  }
+}
+
+function endSessionEarly() {
+  // Mark remaining cards as completed for this session
+  reviewIndex = reviewQueue.length;
+  showCard(); // This will show the completion message
+  document.getElementById('session-controls').classList.add('hidden');
 }
 
 function showCard() {
@@ -167,6 +348,13 @@ function showCard() {
   document.getElementById('card-context').textContent = context;
   document.getElementById('card-counter').textContent =
     `${reviewIndex + 1} / ${reviewQueue.length}`;
+
+  // Show session controls if we have a configured session
+  if (sessionConfig && reviewQueue.length > 0) {
+    document.getElementById('session-controls').classList.remove('hidden');
+  } else {
+    document.getElementById('session-controls').classList.add('hidden');
+  }
 }
 
 function getPrompt(word, mode) {
