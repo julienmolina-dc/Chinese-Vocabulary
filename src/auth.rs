@@ -4,8 +4,13 @@ use std::sync::Arc;
 const AUTH_COOKIE: &str = "hsk_auth";
 
 pub fn login_page(error: bool) -> String {
-    let err_html = if error { r#"<p class="error">Wrong password</p>"# } else { "" };
-    format!(r#"<!DOCTYPE html>
+    let err_html = if error {
+        r#"<p class="error">Wrong password</p>"#
+    } else {
+        ""
+    };
+    format!(
+        r#"<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -39,7 +44,8 @@ button:hover {{ background: #ff6b81; }}
   </form>
 </div>
 </body>
-</html>"#)
+</html>"#
+    )
 }
 
 pub async fn login_get() -> HttpResponse {

@@ -8,6 +8,7 @@ use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 fn load_cards(pool: &PgPool, words: &[Word]) -> tokio::task::JoinHandle<()> {
@@ -34,8 +35,8 @@ struct SrsCard {
     ease_factor: f64,
     interval: u32, // days
     repetitions: u32,
-    next_review: i64, // unix timestamp
-    box_level: u8,    // Leitner box 0-4
+    next_review: i64,    // unix timestamp
+    box_level: u8,       // Leitner box 0-4
     is_relearning: bool, // Flag set when card drops from mastered to learning
 }
 
@@ -51,18 +52,6 @@ impl SrsCard {
             box_level: row.try_get::<i16, _>("box_level")? as u8,
             is_relearning: row.try_get("is_relearning")?,
         })
-    }
-
-    fn new(word_id: u32) -> Self {
-        SrsCard {
-            word_id,
-            ease_factor: 2.5,
-            interval: 0,
-            repetitions: 0,
-            next_review: 0,
-            box_level: 0,
-            is_relearning: false,
-        }
     }
 
     // SM-2 algorithm adapted for Leitner boxes
@@ -174,22 +163,21 @@ async fn get_stats(state: web::Data<AppState>) -> impl Responder {
             let now = chrono::Utc::now().timestamp();
             let total = state.words.len();
 
-            let mastered = sqlx::query_scalar::<_, i64>(
-                "SELECT COUNT(*) FROM srs_cards WHERE box_level >= 4"
-            )
-            .fetch_one(pool)
-            .await
-            .unwrap_or(0);
+            let mastered =
+                sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM srs_cards WHERE box_level >= 4")
+                    .fetch_one(pool)
+                    .await
+                    .unwrap_or(0);
 
             let learning = sqlx::query_scalar::<_, i64>(
-                "SELECT COUNT(*) FROM srs_cards WHERE repetitions > 0 AND box_level < 4"
+                "SELECT COUNT(*) FROM srs_cards WHERE repetitions > 0 AND box_level < 2",
             )
             .fetch_one(pool)
             .await
             .unwrap_or(0);
 
             let due = sqlx::query_scalar::<_, i64>(
-                "SELECT COUNT(*) FROM srs_cards WHERE next_review <= $1"
+                "SELECT COUNT(*) FROM srs_cards WHERE next_review <= $1",
             )
             .bind(now)
             .fetch_one(pool)
@@ -223,43 +211,52 @@ async fn get_progress_stats(state: web::Data<AppState>) -> impl Responder {
             let now = chrono::Utc::now().timestamp();
             let today_start = now - (now % 86400);
 
-            let new = sqlx::query_scalar::<_, i64>(
-                "SELECT COUNT(*) FROM srs_cards WHERE repetitions = 0 AND next_review = 0"
+            let total = state.words.len() as i64;
+
+            let existing_new = sqlx::query_scalar::<_, i64>(
+                "SELECT COUNT(*) FROM srs_cards WHERE repetitions = 0 AND next_review = 0",
             )
             .fetch_one(pool)
             .await
             .unwrap_or(0);
 
+            let existing_cards = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM srs_cards")
+                .fetch_one(pool)
+                .await
+                .unwrap_or(0);
+
+            let missing_words = (total - existing_cards).max(0);
+            let new = existing_new + missing_words;
+
             let learning = sqlx::query_scalar::<_, i64>(
-                "SELECT COUNT(*) FROM srs_cards WHERE repetitions > 0 AND box_level < 2"
+                "SELECT COUNT(*) FROM srs_cards WHERE repetitions > 0 AND box_level < 2",
             )
             .fetch_one(pool)
             .await
             .unwrap_or(0);
 
             let review = sqlx::query_scalar::<_, i64>(
-                "SELECT COUNT(*) FROM srs_cards WHERE box_level >= 2 AND box_level < 4"
+                "SELECT COUNT(*) FROM srs_cards WHERE box_level >= 2 AND box_level < 4",
             )
             .fetch_one(pool)
             .await
             .unwrap_or(0);
 
-            let mastered = sqlx::query_scalar::<_, i64>(
-                "SELECT COUNT(*) FROM srs_cards WHERE box_level >= 4"
-            )
-            .fetch_one(pool)
-            .await
-            .unwrap_or(0);
+            let mastered =
+                sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM srs_cards WHERE box_level >= 4")
+                    .fetch_one(pool)
+                    .await
+                    .unwrap_or(0);
 
             let relearning = sqlx::query_scalar::<_, i64>(
-                "SELECT COUNT(*) FROM srs_cards WHERE is_relearning = true"
+                "SELECT COUNT(*) FROM srs_cards WHERE is_relearning = true",
             )
             .fetch_one(pool)
             .await
             .unwrap_or(0);
 
             let due_today = sqlx::query_scalar::<_, i64>(
-                "SELECT COUNT(*) FROM srs_cards WHERE next_review <= $1"
+                "SELECT COUNT(*) FROM srs_cards WHERE next_review <= $1",
             )
             .bind(now)
             .fetch_one(pool)
@@ -267,7 +264,7 @@ async fn get_progress_stats(state: web::Data<AppState>) -> impl Responder {
             .unwrap_or(0);
 
             let studied_today = sqlx::query_scalar::<_, i64>(
-                "SELECT COUNT(*) FROM review_log WHERE reviewed_at >= $1"
+                "SELECT COUNT(*) FROM review_log WHERE reviewed_at >= $1",
             )
             .bind(today_start)
             .fetch_one(pool)
@@ -276,7 +273,7 @@ async fn get_progress_stats(state: web::Data<AppState>) -> impl Responder {
 
             let seven_days_ago = now - (7 * 24 * 60 * 60);
             let total_reviews_7d = sqlx::query_scalar::<_, i64>(
-                "SELECT COUNT(*) FROM review_log WHERE reviewed_at >= $1"
+                "SELECT COUNT(*) FROM review_log WHERE reviewed_at >= $1",
             )
             .bind(seven_days_ago)
             .fetch_one(pool)
@@ -284,7 +281,7 @@ async fn get_progress_stats(state: web::Data<AppState>) -> impl Responder {
             .unwrap_or(0);
 
             let good_reviews_7d = sqlx::query_scalar::<_, i64>(
-                "SELECT COUNT(*) FROM review_log WHERE reviewed_at >= $1 AND rating >= 3"
+                "SELECT COUNT(*) FROM review_log WHERE reviewed_at >= $1 AND rating >= 3",
             )
             .bind(seven_days_ago)
             .fetch_one(pool)
@@ -336,6 +333,40 @@ struct ReviewQuery {
     session_type: Option<String>, // "standard", "new_only", "mixed"
 }
 
+fn select_review_words<'a>(
+    session_type: &str,
+    limit: usize,
+    candidate_words: &[&'a Word],
+    cards: &[SrsCard],
+    all_srs_word_ids: &HashSet<u32>,
+) -> Vec<&'a Word> {
+    let mut review_words: Vec<&Word> = candidate_words
+        .iter()
+        .filter(|w| cards.iter().any(|c| c.word_id == w.id))
+        .cloned()
+        .collect();
+
+    if session_type == "new_only" || session_type == "mixed" {
+        let mut existing_ids: HashSet<u32> =
+            cards.iter().map(|c| c.word_id).collect();
+
+        for word in candidate_words.iter() {
+            if review_words.len() >= limit {
+                break;
+            }
+            if existing_ids.contains(&word.id) {
+                continue;
+            }
+            if !all_srs_word_ids.contains(&word.id) {
+                review_words.push(*word);
+                existing_ids.insert(word.id);
+            }
+        }
+    }
+
+    review_words
+}
+
 #[get("/api/review")]
 async fn get_review_cards(
     state: web::Data<AppState>,
@@ -347,9 +378,17 @@ async fn get_review_cards(
             let limit = query.limit.unwrap_or(20);
             let session_type = query.session_type.as_deref().unwrap_or("standard");
 
+            let all_srs_word_ids: HashSet<u32> =
+                sqlx::query_scalar::<_, i32>("SELECT word_id FROM srs_cards")
+                    .fetch_all(pool)
+                    .await
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|id| id as u32)
+                    .collect();
+
             let rows = match session_type {
                 "new_only" => {
-                    // Cards never studied
                     sqlx::query(
                         "SELECT word_id, ease_factor, interval, repetitions, next_review, box_level, is_relearning
                          FROM srs_cards
@@ -362,15 +401,13 @@ async fn get_review_cards(
                     .await
                 },
                 "mixed" => {
-                    // Mix of new and due cards
                     let due_limit = limit / 2;
                     let new_limit = limit - due_limit;
 
-                    // Get due cards
                     let due_rows = sqlx::query(
                         "SELECT word_id, ease_factor, interval, repetitions, next_review, box_level, is_relearning
                          FROM srs_cards
-                         WHERE next_review <= $1
+                         WHERE next_review <= $1 AND repetitions > 0
                          ORDER BY box_level ASC, next_review ASC
                          LIMIT $2"
                     )
@@ -379,7 +416,6 @@ async fn get_review_cards(
                     .fetch_all(pool)
                     .await;
 
-                    // Get new cards
                     let new_rows = sqlx::query(
                         "SELECT word_id, ease_factor, interval, repetitions, next_review, box_level, is_relearning
                          FROM srs_cards
@@ -391,11 +427,9 @@ async fn get_review_cards(
                     .fetch_all(pool)
                     .await;
 
-                    // Combine and shuffle
                     match (due_rows, new_rows) {
                         (Ok(mut due), Ok(new)) => {
                             due.extend(new);
-                            // Shuffle the combined results
                             use rand::seq::SliceRandom;
                             let mut rng = rand::thread_rng();
                             due.shuffle(&mut rng);
@@ -405,7 +439,6 @@ async fn get_review_cards(
                     }
                 },
                 _ => {
-                    // Standard: due cards only
                     sqlx::query(
                         "SELECT word_id, ease_factor, interval, repetitions, next_review, box_level, is_relearning
                          FROM srs_cards
@@ -418,37 +451,108 @@ async fn get_review_cards(
                     .fetch_all(pool)
                     .await
                 }
-            }.unwrap_or_default();
+            }
+            .unwrap_or_default();
 
             let cards: Vec<SrsCard> = rows
                 .iter()
                 .filter_map(|row| SrsCard::from_row(row).ok())
                 .collect();
 
-            // Filter by level if specified
-            let filtered_cards: Vec<SrsCard> = if let Some(level) = query.level {
-                cards
-                    .into_iter()
-                    .filter(|c| state.words.iter().any(|w| w.id == c.word_id && w.level == level))
-                    .collect()
+            let candidate_words: Vec<&Word> = if let Some(level) = query.level {
+                state.words.iter().filter(|w| w.level == level).collect()
             } else {
-                cards
+                state.words.iter().collect()
             };
 
-            let word_ids: Vec<u32> = filtered_cards.iter().map(|c| c.word_id).collect();
-            let review_words: Vec<&Word> = state
-                .words
-                .iter()
-                .filter(|w| word_ids.contains(&w.id))
+            let filtered_cards: Vec<SrsCard> = cards
+                .into_iter()
+                .filter(|c| candidate_words.iter().any(|w| w.id == c.word_id))
                 .collect();
+
+            let review_words = select_review_words(
+                session_type,
+                limit,
+                &candidate_words,
+                &filtered_cards,
+                &all_srs_word_ids,
+            );
 
             HttpResponse::Ok().json(review_words)
         }
         None => {
-            // Mock data for testing
             let mock_words: Vec<&Word> = state.words.iter().take(10).collect();
             HttpResponse::Ok().json(mock_words)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_test_word(id: u32) -> Word {
+        Word {
+            id,
+            hanzi: format!("汉字{}", id),
+            pinyin: format!("pinyin{}", id),
+            english: format!("word{}", id),
+            level: 1,
+            sentence_cn: String::new(),
+            sentence_pinyin: String::new(),
+            sentence_en: String::new(),
+        }
+    }
+
+    fn make_test_card(word_id: u32) -> SrsCard {
+        SrsCard {
+            word_id,
+            ease_factor: 2.5,
+            interval: 0,
+            repetitions: 0,
+            next_review: 0,
+            box_level: 0,
+            is_relearning: false,
+        }
+    }
+
+    #[test]
+    fn new_only_includes_words_missing_from_srs_cards() {
+        let words = vec![
+            make_test_word(1),
+            make_test_word(2),
+            make_test_word(3),
+        ];
+        let candidate_words: Vec<&Word> = words.iter().collect();
+        let cards = vec![make_test_card(1)];
+        let all_srs_word_ids: HashSet<u32> = HashSet::from([1]);
+
+        let selected = select_review_words("new_only", 5, &candidate_words, &cards, &all_srs_word_ids);
+
+        assert!(selected.iter().any(|w| w.id == 2));
+        assert!(selected.iter().any(|w| w.id == 3));
+        assert_eq!(selected.len(), 3);
+    }
+
+    #[test]
+    fn mixed_session_avoids_duplicate_cards_and_still_adds_missing_words() {
+        let words = vec![
+            make_test_word(1),
+            make_test_word(2),
+            make_test_word(3),
+            make_test_word(4),
+        ];
+        let candidate_words: Vec<&Word> = words.iter().collect();
+        let cards = vec![make_test_card(1), make_test_card(2)];
+        let all_srs_word_ids: HashSet<u32> = HashSet::from([1, 2]);
+
+        let selected = select_review_words("mixed", 4, &candidate_words, &cards, &all_srs_word_ids);
+
+        assert!(selected.iter().any(|w| w.id == 1));
+        assert!(selected.iter().any(|w| w.id == 2));
+        assert!(selected.iter().any(|w| w.id == 3));
+        assert!(selected.iter().any(|w| w.id == 4));
+        assert_eq!(selected.len(), 4);
     }
 }
 
@@ -477,13 +581,13 @@ async fn submit_review(
 
             if let Some(row) = row {
                 if let Ok(mut card) = SrsCard::from_row(&row) {
-                    let previous_box_level = card.box_level;
+                    let _previous_box_level = card.box_level;
                     card.review(body.rating);
 
                     // Log the review
                     let _ = sqlx::query(
                         "INSERT INTO review_log (word_id, rating, reviewed_at, was_relearning)
-                         VALUES ($1, $2, $3, $4)"
+                         VALUES ($1, $2, $3, $4)",
                     )
                     .bind(body.word_id as i32)
                     .bind(body.rating as i32)
@@ -653,23 +757,27 @@ async fn get_story(path: web::Path<u32>) -> impl Responder {
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     dotenvy::dotenv().ok();
-    
+
     let database_url = std::env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgres://user:password@localhost/hsk".to_string());
 
     let pool = match PgPoolOptions::new()
         .max_connections(5)
         .connect(&database_url)
-        .await {
-            Ok(p) => {
-                println!("✅ Connected to database");
-                Some(p)
-            },
-            Err(e) => {
-                println!("⚠️  Database connection failed: {}. Running in test mode with mock data.", e);
-                None
-            }
-        };
+        .await
+    {
+        Ok(p) => {
+            println!("✅ Connected to database");
+            Some(p)
+        }
+        Err(e) => {
+            println!(
+                "⚠️  Database connection failed: {}. Running in test mode with mock data.",
+                e
+            );
+            None
+        }
+    };
 
     // Only run migrations if we have a database connection
     if let Some(ref pool) = pool {
@@ -684,22 +792,18 @@ async fn main() -> std::io::Result<()> {
                 box_level SMALLINT NOT NULL DEFAULT 0,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-            )"
+            )",
         )
         .execute(pool)
         .await;
 
-        let _ = sqlx::query(
-            "CREATE INDEX IF NOT EXISTS idx_next_review ON srs_cards(next_review)"
-        )
-        .execute(pool)
-        .await;
+        let _ = sqlx::query("CREATE INDEX IF NOT EXISTS idx_next_review ON srs_cards(next_review)")
+            .execute(pool)
+            .await;
 
-        let _ = sqlx::query(
-            "CREATE INDEX IF NOT EXISTS idx_box_level ON srs_cards(box_level)"
-        )
-        .execute(pool)
-        .await;
+        let _ = sqlx::query("CREATE INDEX IF NOT EXISTS idx_box_level ON srs_cards(box_level)")
+            .execute(pool)
+            .await;
 
         let words = get_all_words();
         let _init = load_cards(pool, &words);

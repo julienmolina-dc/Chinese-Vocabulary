@@ -9,6 +9,8 @@ let cardMode = 'en_to_cn'; // per-card mode when mixed
 let reviewQueue = [];
 let reviewIndex = 0;
 let cardFlipped = false;
+let sessionConfig = null;
+let sessionConfigModalInitialized = false;
 
 // Quiz state
 let quizItems = [];
@@ -76,7 +78,7 @@ async function updateDashboard() {
     // Update metrics
     document.getElementById('due-today').textContent = stats.due_today;
     document.getElementById('studied-today').textContent = stats.studied_today;
-    document.getElementById('retention-rate').textContent = Math.round(stats.retention_rate_7d * 100) + '%';
+    document.getElementById('retention-rate').textContent = Math.round(stats.retention_rate_7d) + '%';
     document.getElementById('study-streak').textContent = stats.study_streak;
 
     // Update chart
@@ -196,28 +198,33 @@ function showSessionConfigModal() {
   const modal = document.getElementById('session-config-modal');
   modal.classList.remove('hidden');
 
-  // Update card limit display
   const limitInput = document.getElementById('card-limit');
   const limitValue = document.getElementById('card-limit-value');
-  limitInput.addEventListener('input', () => {
-    limitValue.textContent = limitInput.value;
-    updateEstimatedTime();
-  });
+  limitValue.textContent = limitInput.value;
+  updateEstimatedTime();
 
-  // Handle start session
-  document.getElementById('start-session-btn').addEventListener('click', () => {
-    const config = {
-      sessionType: document.getElementById('session-type').value,
-      limit: parseInt(document.getElementById('card-limit').value),
-      level: document.getElementById('level-filter').value
-    };
-    modal.classList.add('hidden');
-    startConfiguredSession(config);
-  });
+  if (!sessionConfigModalInitialized) {
+    limitInput.addEventListener('input', () => {
+      limitValue.textContent = limitInput.value;
+      updateEstimatedTime();
+    });
 
-  document.getElementById('cancel-session-btn').addEventListener('click', () => {
-    modal.classList.add('hidden');
-  });
+    document.getElementById('start-session-btn').addEventListener('click', () => {
+      const config = {
+        sessionType: document.getElementById('session-type').value,
+        limit: parseInt(document.getElementById('card-limit').value),
+        level: document.getElementById('level-filter').value
+      };
+      modal.classList.add('hidden');
+      startConfiguredSession(config);
+    });
+
+    document.getElementById('cancel-session-btn').addEventListener('click', () => {
+      modal.classList.add('hidden');
+    });
+
+    sessionConfigModalInitialized = true;
+  }
 }
 
 async function startConfiguredSession(config) {
@@ -286,7 +293,6 @@ async function extendSession() {
   if (!sessionConfig) return;
 
   try {
-    // Get additional cards based on session type
     const params = new URLSearchParams({
       limit: 10, // Add 10 more cards
       session_type: sessionConfig.sessionType,
@@ -297,13 +303,22 @@ async function extendSession() {
     const additionalCards = await res.json();
 
     if (additionalCards.length > 0) {
-      // Shuffle and add to queue
-      const shuffled = shuffle(additionalCards);
-      reviewQueue.push(...shuffled);
-      document.getElementById('extend-session-btn').textContent = 'Extended!';
-      setTimeout(() => {
-        document.getElementById('extend-session-btn').textContent = 'Extend Session';
-      }, 2000);
+      const existingIds = new Set(reviewQueue.map(w => w.id));
+      const uniqueCards = additionalCards.filter(w => !existingIds.has(w.id));
+
+      if (uniqueCards.length > 0) {
+        const shuffled = shuffle(uniqueCards);
+        reviewQueue.push(...shuffled);
+        document.getElementById('extend-session-btn').textContent = 'Extended!';
+        setTimeout(() => {
+          document.getElementById('extend-session-btn').textContent = 'Extend Session';
+        }, 2000);
+      } else {
+        document.getElementById('extend-session-btn').textContent = 'No more new cards';
+        setTimeout(() => {
+          document.getElementById('extend-session-btn').textContent = 'Extend Session';
+        }, 2000);
+      }
     }
   } catch (error) {
     console.error('Failed to extend session:', error);
