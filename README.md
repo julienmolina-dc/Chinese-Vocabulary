@@ -1,70 +1,116 @@
-# 🀄 Julien's Chinese Vocabulary
+# 中文课 Flashcards
 
-A spaced-repetition vocabulary learning app for HSK 1/2 + class vocabulary (410 words) with a Rust backend and vanilla JS frontend.
-
-## Learning Method
-
-Based on research-backed techniques:
-- Spaced Repetition (SM-2 + Leitner boxes)
-- Active Recall through flashcards
-- Context Learning with example sentences
-- Multi-directional practice (4 modes + mixed)
-- Reading practice with annotated Chinese stories
-
-## Running Locally
-
-```bash
-cargo run
-```
-Open `http://localhost:8080` — default password: `hsk2025`
-
-Set a custom password:
-```bash
-HSK_PASSWORD=mypassword cargo run
-```
-
-## Deploy to Render with Persistent Storage (Supabase)
-
-### 1. Set up Supabase (Free PostgreSQL)
-
-1. Go to [supabase.com](https://supabase.com)
-2. Click "Start your project" and sign in with GitHub
-3. Create a new project with default settings
-4. In the "SQL Editor" tab, run the migration from `migrations/001_init.sql`
-   - Click "New query"
-   - Paste the contents of `migrations/001_init.sql`
-   - Click "Run"
-5. In the "Settings > Database" section, copy your connection string:
-   - Copy the URI under "Connection String"
-   - It should look like: `postgresql://postgres.[project-id]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres`
-
-### 2. Deploy to Render
-
-1. Create a new Web Service on Render
-2. Connect your GitHub repo
-3. Set build command: `cargo build --release`
-4. Set start command: `./target/release/julien-chinese-vocab`
-5. Add environment variables:
-   - `DATABASE_URL`: Paste your Supabase connection string
-   - `HSK_PASSWORD`: Your desired login password
-   - `PORT`: `8080` (default)
-6. Deploy
-
-Your app will be at the URL provided by Render, with persistent progress storage via Supabase!
-
-### Local Development with Supabase
-
-1. Copy `.env.example` to `.env`
-2. Update `DATABASE_URL` with your Supabase connection string
-3. Run `cargo run` to start locally
-4. Progress will now persist to your Supabase database instead of local files
+A modern spaced-repetition flashcard app for Chinese vocabulary and grammar, built as a single-page app deployable on Netlify (free tier).
 
 ## Features
 
-- Dashboard with progress tracking
-- SRS flashcards (Mixed / EN→汉字 / EN→Pinyin / 汉字→EN / 汉字→Pinyin)
-- Multiple-choice quiz
-- Browsable word list (HSK 1 / HSK 2 / Class vocabulary)
-- 5 annotated Chinese stories (hover for pinyin, click for translation)
-- Password-protected access
-- **Persistent progress storage** (PostgreSQL via Supabase for production, local SQLite optional for development)
+- **622 vocabulary cards** + **32 grammar patterns** from 28 class sessions (Aug 2025 to Jun 2026)
+- **3 quiz modes**: From Character, From Pinyin, From English/French + Mixed mode
+- **Spaced repetition** (SM-2 algorithm): cards are scheduled based on your performance
+- **Cross-device sync** via Netlify Blobs (no database, no account needed)
+- **Filter by course** or card type (vocab/grammar)
+- **Browse view** with search, SRS status, and next review dates
+- **Keyboard shortcuts**: Space/Enter to flip, 1-4 to rate
+- **Export/Import** progress as JSON for backup
+- **Works offline**: falls back to localStorage when no network
+
+## How Sync Works
+
+Instead of user accounts, you choose a **passphrase** (any string, min. 3 characters). This passphrase is your unique key in the cloud store.
+
+- Use the **same passphrase** on all your devices (laptop, phone, tablet)
+- Progress syncs automatically after each card review (3-second debounce)
+- If two devices conflict, the one with more reviews wins
+- No signup, no email, no password reset. Just your secret phrase.
+
+**Example passphrases**: `julien-chinese`, `moncours2025`, `zhongwen42`
+
+## Project Structure
+
+```
+chinese_flashcards_app/
+├── index.html                    # Single-page app (all UI + embedded data)
+├── netlify.toml                  # Netlify configuration
+├── package.json                  # Dependencies (@netlify/blobs)
+├── README.md                     # This file
+└── netlify/functions/
+    ├── get-progress.mjs          # GET: load progress from cloud
+    └── save-progress.mjs         # POST: save progress to cloud
+```
+
+## Deploy to Netlify
+
+### Option A: Git deploy (recommended)
+
+1. Push this folder to a GitHub/GitLab repo
+2. Go to [app.netlify.com](https://app.netlify.com) and click "Add new site" > "Import an existing project"
+3. Connect your repo
+4. Build settings:
+   - **Build command**: (leave empty)
+   - **Publish directory**: `.`
+5. Click "Deploy site"
+6. Done! Your app is live at `https://your-site-name.netlify.app`
+
+### Option B: Drag and drop
+
+1. Run `npm install` locally (to get node_modules for the functions)
+2. Zip the entire folder
+3. Go to [app.netlify.com/drop](https://app.netlify.com/drop)
+4. Drag the zip file
+
+### Option C: Netlify CLI
+
+```bash
+npm install
+npx netlify-cli deploy --prod
+```
+
+## Local Development
+
+The app works locally without Netlify Functions (uses localStorage only):
+
+```bash
+# Just open index.html in a browser
+open index.html
+```
+
+For full sync testing with functions:
+
+```bash
+npm install
+npx netlify dev
+```
+
+## Free Tier Limits
+
+This app fits comfortably within Netlify's free tier:
+- **Functions**: 125,000 invocations/month (each card review = 1 call, debounced)
+- **Blobs storage**: Included, no extra cost
+- **Bandwidth**: 100GB/month (the app is ~100KB)
+
+## Tech Stack
+
+- Pure HTML/CSS/JavaScript (no framework, no build step)
+- Font Awesome 6 for icons
+- Netlify Functions (serverless, Node.js)
+- Netlify Blobs (key-value store)
+
+## Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| Space / Enter | Flip card |
+| 1 | Again (forgot) |
+| 2 | Hard |
+| 3 | Good |
+| 4 | Easy |
+
+## Data Source
+
+Vocabulary and grammar extracted from 28 Chinese class sessions (New Practical Chinese Reader / NPCR, HSK 1-2 level), covering:
+- Greetings, introductions, numbers
+- Dates, time, daily activities
+- Food, restaurant, shopping
+- Weather, seasons, travel
+- Directions, professions, sports
+- Comparisons, duration, emphasis structures
