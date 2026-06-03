@@ -377,7 +377,7 @@ function getAllCards(courseFilter, typeFilter) {
     for (var j = 0; j < grammar.length; j++) {
       var g = grammar[j];
       if (courseFilter !== "all" && g.course !== parseInt(courseFilter)) continue;
-      cards.push({id:"g_"+j, type:"grammar", character:g.point, pinyin:"Grammar", meaning:g.point, course:g.course});
+      cards.push({id:g.id, type:"grammar", character:g.character, pinyin:g.pinyin, meaning:g.meaning, course:g.course});
     }
   }
   return cards;
